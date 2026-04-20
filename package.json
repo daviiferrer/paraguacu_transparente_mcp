@@ -12,6 +12,12 @@
     "test": "npm run build && node --test \"test/**/*.test.mjs\"",
     "test:unit": "node --test \"test/**/*.test.mjs\"",
     "test:live": "npm run build && node scripts/live-audit-flow.mjs",
+    "test:live:matrix": "npm run build && node scripts/live-audit-matrix.mjs",
+    "test:live:despesas": "npm run build && node scripts/live-audit-matrix.mjs --suite=despesas",
+    "test:live:pessoal": "npm run build && node scripts/live-audit-matrix.mjs --suite=pessoal",
+    "test:live:diario": "npm run build && node scripts/live-audit-matrix.mjs --suite=diario",
+    "test:live:diario:deep": "npm run build && node scripts/live-diary-deep-audit.mjs",
+    "test:live:licitacoes": "npm run build && node scripts/live-audit-matrix.mjs --suite=licitacoes",
     "start": "node dist/index.js",
     "dev": "npx tsx src/index.ts",
     "inspector": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js"
