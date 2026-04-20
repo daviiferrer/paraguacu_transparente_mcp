@@ -1,0 +1,6 @@
+services:
+  mcp-fiorilli:
+    build: .
+    container_name: mcp-fiorilli-transparencia
+    env_file: .env
+    restart: unless-stopped
