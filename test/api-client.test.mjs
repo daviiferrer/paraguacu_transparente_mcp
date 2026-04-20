@@ -238,3 +238,60 @@ test('buscarDiarioPorTermo aceita janela ISO e filtra candidatos corretamente', 
     fs.rmSync(tempDir, { recursive: true, force: true });
   } catch {}
 });
+
+test('formatarItemDiario corrige edicao_ano invalido e parseDateInput valida datas reais', async () => {
+  const client = new FiorilliApiClient('http://placeholder.local');
+  const formatted = client.formatarItemDiario({
+    iddo: 787146,
+    data: '2026-03-09',
+    edicao_do: 1275,
+    ano_do: '2',
+    pgtotal: 321,
+    flag_extra: 0,
+  });
+
+  assert.equal(formatted.edicao_ano, '2026');
+  assert.equal(formatted.data_iso, '2026-03-09');
+  assert.equal(client.parseDateInput('31/02/2026'), null);
+  assert.equal(client.parseDateInput('2026-02-31'), null);
+  assert.ok(client.parseDateInput('09/03/2026') instanceof Date);
+  closeClientDb(client);
+});
+
+test('parseDespesasGeraisRows e pager extraem dados da tela oficial', async () => {
+  const client = new FiorilliApiClient('http://placeholder.local');
+  const fixturePath = path.join(process.cwd(), '.mcp-data', 'DespesasPorEntidade-response.html');
+  const html = fs.readFileSync(fixturePath, 'utf8');
+
+  const rows = client.parseDespesasGeraisRows(html);
+  const summary = client.parsePagerSummary(html);
+  const totals = client.parseDespesasGeraisTotals(html);
+  const hidden = client.extractHiddenInputs(html);
+
+  assert.equal(rows.length, 25);
+  assert.equal(rows[0].CODIGO, '1');
+  assert.equal(rows[0].TPEM, 'GL');
+  assert.match(rows[0].NOMEFOR || '', /NS KARYDI/);
+  assert.equal(summary.pagina_atual, 1);
+  assert.equal(summary.total_paginas, 197);
+  assert.equal(summary.total_linhas, 4910);
+  assert.equal(totals.EMPENHADO, '118.687.768,44');
+  assert.ok(typeof hidden.__VIEWSTATE === 'string' && hidden.__VIEWSTATE.length > 0);
+  assert.ok(typeof hidden['gridDespesas$CallbackState'] === 'string' && hidden['gridDespesas$CallbackState'].length > 0);
+  closeClientDb(client);
+});
+
+test('parseCallbackResult extrai html util do callback ASPxGridView', async () => {
+  const client = new FiorilliApiClient('http://placeholder.local');
+  const fixturePath = path.join(process.cwd(), '.mcp-data', 'DespesasPorEntidade-callback-122-response.txt');
+  const raw = fs.readFileSync(fixturePath, 'utf8');
+
+  const html = client.parseCallbackResult(raw);
+  const summary = client.parsePagerSummary(html);
+  const hidden = client.extractHiddenInputs(html);
+
+  assert.match(html, /gridDespesas_DXMainTable/);
+  assert.ok(summary.total_paginas >= 0);
+  assert.ok(typeof hidden['gridDespesas$CallbackState'] === 'string' && hidden['gridDespesas$CallbackState'].length > 0);
+  closeClientDb(client);
+});

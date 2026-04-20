@@ -197,7 +197,7 @@ const despesasTools: ToolDef[] = [
   {
     name: 'despesas_gerais',
     description:
-      '⚠️ INSTÁVEL - Este endpoint pode retornar erro 500 em alguns portais Fiorilli. Prefira despesas_por_orgao, despesas_por_unidade ou despesas_por_fornecedor. Lista detalhada de todas as despesas com filtros avançados. Permite filtrar por COVID, CNPJ, e listar apenas códigos de empenho.',
+      'Lista detalhada das despesas/empenhos usando a própria tela oficial do portal (DespesasPorEntidade.aspx), inclusive quando a rota VersaoJson/DespesasGerais estiver quebrada. Retorna empenho, fornecedor, CPF/CNPJ, dotação, valores, função, subfunção, fonte, natureza e licitação.',
     category: 'Despesas',
     path: DESPESAS_PATH,
     listagem: 'DespesasGerais',
@@ -255,7 +255,7 @@ const despesasTools: ToolDef[] = [
   {
     name: 'despesas_empenhado_por_empenho',
     description:
-      'Lista valores empenhados de um empenho específico em um período.',
+      'Lista valores empenhados de um empenho específico em um período. Se IDButton não for enviado, o servidor usa lnkDespesasPor_NotaEmpenho por padrão, que é o contrato real da tela oficial.',
     category: 'Despesas',
     path: DESPESAS_PATH,
     listagem: 'EmpenhosDespesas_Empenhado_PorNumeroEmpenho',
@@ -264,7 +264,7 @@ const despesasTools: ToolDef[] = [
   {
     name: 'despesas_liquidado_por_empenho',
     description:
-      'Lista valores liquidados de um empenho específico em um período.',
+      'Lista valores liquidados de um empenho específico em um período. Se IDButton não for enviado, o servidor usa lnkDespesasPor_NotaEmpenho por padrão, que é o contrato real da tela oficial.',
     category: 'Despesas',
     path: DESPESAS_PATH,
     listagem: 'EmpenhosDespesas_Liquidado_PorNumeroEmpenho',
@@ -273,7 +273,7 @@ const despesasTools: ToolDef[] = [
   {
     name: 'despesas_pago_por_empenho',
     description:
-      'Lista valores pagos de um empenho específico em um período.',
+      'Lista valores pagos de um empenho específico em um período. Se IDButton não for enviado, o servidor usa lnkDespesasPor_NotaEmpenho por padrão, que é o contrato real da tela oficial.',
     category: 'Despesas',
     path: DESPESAS_PATH,
     listagem: 'EmpenhosDespesas_Pago_PorNumeroEmpenho',
@@ -412,7 +412,7 @@ const despesasTools: ToolDef[] = [
   {
     name: 'despesas_por_exigibilidade',
     description:
-      'Lista despesas por ordem de exigibilidade (ordem cronológica de pagamento). Datas no formato DD.MM.AAAA.',
+      'Lista despesas por ordem de exigibilidade (ordem cronológica de pagamento). Usa DiaInicioPeriodo e DiaFinalPeriodo como datas completas no formato DD.MM.AAAA; se strTipoLista não for informado, o servidor usa 1.',
     category: 'Despesas',
     path: DESPESAS_PATH,
     listagem: 'DespesasporExigibilidade',

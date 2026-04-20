@@ -24,6 +24,12 @@ type ControlArgs = {
   order: 'asc' | 'desc';
 };
 
+type ValidationIssue = {
+  param: string;
+  value: string;
+  reason: string;
+};
+
 const CONFIGURAR_TOOL = {
   name: 'configurar_portal',
   description: '[Configuracao] Exibe configuracao atual; altera apenas se MCP_ALLOW_CONFIG_UPDATE=true.',
@@ -110,6 +116,221 @@ function decodeCursorObject(cursor?: string): Record<string, unknown> | null {
 
 function encodeCursorObject(value: Record<string, unknown>): string {
   return Buffer.from(JSON.stringify(value), 'utf-8').toString('base64');
+}
+
+function parseIntStrict(value: string): number | null {
+  const raw = String(value || '').trim();
+  if (!/^\d+$/.test(raw)) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
+}
+
+function parseDateStrict(rawValue: string): Date | null {
+  const raw = String(rawValue || '').trim();
+  if (!raw) return null;
+
+  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (br) {
+    const [, dd, mm, yyyy] = br;
+    const day = Number(dd);
+    const month = Number(mm);
+    const year = Number(yyyy);
+    const date = new Date(year, month - 1, day);
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      return null;
+    }
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const [, yyyy, mm, dd] = iso;
+    const day = Number(dd);
+    const month = Number(mm);
+    const year = Number(yyyy);
+    const date = new Date(year, month - 1, day);
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      return null;
+    }
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  return null;
+}
+
+function parseDateDotStrict(rawValue: string): Date | null {
+  const raw = String(rawValue || '').trim();
+  if (!raw) return null;
+
+  const brDot = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!brDot) return null;
+
+  const [, dd, mm, yyyy] = brDot;
+  const day = Number(dd);
+  const month = Number(mm);
+  const year = Number(yyyy);
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function validateDateRange(args: Record<string, unknown>, required: boolean): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const dataInicial = asString(args.dataInicial).trim();
+  const dataFinal = asString(args.dataFinal).trim();
+
+  if (required && !dataInicial) {
+    issues.push({
+      param: 'dataInicial',
+      value: dataInicial,
+      reason: 'obrigatorio para esta tool.',
+    });
+  }
+  if (required && !dataFinal) {
+    issues.push({
+      param: 'dataFinal',
+      value: dataFinal,
+      reason: 'obrigatorio para esta tool.',
+    });
+  }
+  if (dataInicial && !parseDateStrict(dataInicial)) {
+    issues.push({
+      param: 'dataInicial',
+      value: dataInicial,
+      reason: 'data invalida. Use DD/MM/AAAA ou YYYY-MM-DD com data real de calendario.',
+    });
+  }
+  if (dataFinal && !parseDateStrict(dataFinal)) {
+    issues.push({
+      param: 'dataFinal',
+      value: dataFinal,
+      reason: 'data invalida. Use DD/MM/AAAA ou YYYY-MM-DD com data real de calendario.',
+    });
+  }
+
+  const inicio = parseDateStrict(dataInicial);
+  const fim = parseDateStrict(dataFinal);
+  if (inicio && fim && inicio > fim) {
+    issues.push({
+      param: 'dataInicial',
+      value: dataInicial,
+      reason: 'nao pode ser maior que dataFinal.',
+    });
+  }
+
+  return issues;
+}
+
+function validateQueryParams(queryParams: Record<string, string>, listagem?: string): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const monthFields = ['MesInicialPeriodo', 'MesFinalPeriodo'];
+  const yearFields = ['Exercicio', 'ConectarExercicio'];
+  const isExigibilidade = listagem === 'DespesasporExigibilidade';
+
+  for (const field of monthFields) {
+    if (!(field in queryParams)) continue;
+    const value = queryParams[field];
+    const parsed = parseIntStrict(value);
+    if (parsed === null || parsed < 1 || parsed > 12) {
+      issues.push({
+        param: field,
+        value,
+        reason: 'deve ser inteiro entre 1 e 12.',
+      });
+    }
+  }
+
+  if (isExigibilidade) {
+    const inicio = String(queryParams.DiaInicioPeriodo || '').trim();
+    const fim = String(queryParams.DiaFinalPeriodo || '').trim();
+    if (inicio && !parseDateDotStrict(inicio)) {
+      issues.push({
+        param: 'DiaInicioPeriodo',
+        value: inicio,
+        reason: 'deve estar no formato DD.MM.AAAA com data real de calendario.',
+      });
+    }
+    if (fim && !parseDateDotStrict(fim)) {
+      issues.push({
+        param: 'DiaFinalPeriodo',
+        value: fim,
+        reason: 'deve estar no formato DD.MM.AAAA com data real de calendario.',
+      });
+    }
+    const inicioDate = parseDateDotStrict(inicio);
+    const fimDate = parseDateDotStrict(fim);
+    if (inicioDate && fimDate && inicioDate > fimDate) {
+      issues.push({
+        param: 'DiaInicioPeriodo',
+        value: inicio,
+        reason: 'nao pode ser maior que DiaFinalPeriodo.',
+      });
+    }
+  } else {
+    const dayFields = ['DiaInicioPeriodo', 'DiaFinalPeriodo'];
+    for (const field of dayFields) {
+      if (!(field in queryParams)) continue;
+      const value = queryParams[field];
+      const parsed = parseIntStrict(value);
+      if (parsed === null || parsed < 1 || parsed > 31) {
+        issues.push({
+          param: field,
+          value,
+          reason: 'deve ser inteiro entre 1 e 31.',
+        });
+      }
+    }
+  }
+
+  for (const field of yearFields) {
+    if (!(field in queryParams)) continue;
+    const value = queryParams[field];
+    const parsed = parseIntStrict(value);
+    if (parsed === null || String(value).trim().length !== 4 || parsed < 1900 || parsed > 9999) {
+      issues.push({
+        param: field,
+        value,
+        reason: 'deve ter 4 digitos numericos (ex: 2026).',
+      });
+    }
+  }
+
+  const mesInicio = parseIntStrict(queryParams.MesInicialPeriodo || '');
+  const mesFinal = parseIntStrict(queryParams.MesFinalPeriodo || '');
+  const diaInicio = parseIntStrict(queryParams.DiaInicioPeriodo || '');
+  const diaFinal = parseIntStrict(queryParams.DiaFinalPeriodo || '');
+  if (mesInicio !== null && mesFinal !== null) {
+    if (mesInicio > mesFinal) {
+      issues.push({
+        param: 'MesInicialPeriodo',
+        value: String(mesInicio),
+        reason: 'nao pode ser maior que MesFinalPeriodo para o mesmo exercicio.',
+      });
+    } else if (mesInicio === mesFinal && diaInicio !== null && diaFinal !== null && diaInicio > diaFinal) {
+      issues.push({
+        param: 'DiaInicioPeriodo',
+        value: String(diaInicio),
+        reason: 'nao pode ser maior que DiaFinalPeriodo quando o mes inicial e final sao iguais.',
+      });
+    }
+  }
+
+  return issues;
 }
 
 function parseControlArgs(args: Record<string, unknown> | undefined): ControlArgs {
@@ -335,10 +556,26 @@ export async function callTool(state: SessionState, name: string, args: Record<s
       return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }], structuredContent: payload, isError: true };
     }
 
+    const dateIssues = validateDateRange(args, false);
+    if (dateIssues.length > 0) {
+      const payload = {
+        ok: false,
+        tool: name,
+        message: 'Parametros de data invalidos.',
+        invalid_params: dateIssues,
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }], structuredContent: payload, isError: true };
+    }
+
     const scanCursor = decodeCursorObject(asString(args._cursor));
     const startedAt = Date.now();
     const deadline = startedAt + DIARIO_SCAN_TIME_BUDGET_MS;
     let scanOffset = Math.max(0, Number(scanCursor?.scan_offset) || 0);
+    let resultOffset = Math.max(
+      0,
+      Number(scanCursor?.result_offset)
+      || ((control.page > 1 ? control.page - 1 : 0) * control.pageSize),
+    );
     let nextScanOffset = scanOffset;
     let scanComplete = false;
     let lotesExecutados = 0;
@@ -408,31 +645,39 @@ export async function callTool(state: SessionState, name: string, args: Record<s
       rows.sort((a, b) => compareValues(a?.[field], b?.[field], control.order));
     }
 
-    const paged = normalizeList(rows, control);
+    const effectiveOffset = Math.max(0, resultOffset);
+    const nextResultOffset = effectiveOffset + control.pageSize;
+    const pagedRows = rows.slice(effectiveOffset, nextResultOffset);
+    const hasMoreRows = nextResultOffset < rows.length;
+    const currentPage = Math.floor(effectiveOffset / control.pageSize) + 1;
+    const hasNext = !scanComplete || hasMoreRows;
+    const nextCursor = hasNext
+      ? encodeCursorObject({
+          scan_offset: scanComplete ? nextScanOffset : nextScanOffset,
+          result_offset: nextResultOffset,
+        })
+      : undefined;
     const payload = {
       ok: true,
       tool: name,
       meta: {
         termo,
         fonte_principal: 'pdf',
-        pagina: paged.page,
+        pagina: currentPage,
         por_pagina: control.pageSize,
         lotes_executados: lotesExecutados,
         documentos_processados_no_lote: processedDocs,
         scan_offset_atual: Math.max(0, Number(scanCursor?.scan_offset) || 0),
+        result_offset_atual: effectiveOffset,
         scan_completo: scanComplete,
         is_partial: !scanComplete,
         scan_tempo_ms: Date.now() - startedAt,
         scan_limite_lotes_atingido: limiteLotesAtingido,
         scan_limite_tempo_atingido: limiteTempoAtingido,
-        total_matches: paged.total,
-        total_paginas: paged.totalPages,
-        has_next: scanComplete ? paged.hasNext : true,
-        next_cursor: scanComplete
-          ? paged.nextCursor
-          : encodeCursorObject({
-              scan_offset: nextScanOffset,
-            }),
+        total_matches: rows.length,
+        total_paginas: scanComplete ? Math.max(1, Math.ceil(rows.length / control.pageSize)) : undefined,
+        has_next: hasNext,
+        next_cursor: nextCursor,
         total_documentos_candidatos: totalCandidates,
         total_documentos_indexados: totalIndexed,
         total_documentos_com_match: documentosComMatch,
@@ -442,7 +687,7 @@ export async function callTool(state: SessionState, name: string, args: Record<s
           data_final: asString(args.dataFinal) || null,
         },
       },
-      matches: paged.rows,
+      matches: pagedRows,
       falhas,
     };
     return {
@@ -477,6 +722,21 @@ export async function callTool(state: SessionState, name: string, args: Record<s
           data: diario.edicoes,
         };
       } else if (name === 'listar_diarios_por_data') {
+        const dateIssues = validateDateRange(args, true);
+        if (dateIssues.length > 0) {
+          const errorPayload = {
+            ok: false,
+            tool: name,
+            message: 'Parametros de data invalidos.',
+            invalid_params: dateIssues,
+          };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(errorPayload, null, 2) }],
+            structuredContent: errorPayload,
+            isError: true,
+          };
+        }
+
         const pagina = clampInt(args.pagina, control.page, 1, 1000000);
         const porPagina = clampInt(args.por_pagina, control.pageSize, 1, 50);
         const diario = await state.apiClient.listarDiariosPorData(
@@ -561,7 +821,7 @@ export async function callTool(state: SessionState, name: string, args: Record<s
         ? await extractPdfText(state, asString(args.url_pdf))
         : await state.apiClient.extrairTextoModoLeitura(asString(args.url_modo_texto));
 
-      const textControlSize = clampInt(args._por_pagina, DEFAULT_TEXT_BLOCK_CHARS, 500, 100000);
+      const textControlSize = clampInt(args._por_pagina, DEFAULT_TEXT_BLOCK_CHARS, 50, 100000);
       const term = control.search;
       const baseText = term ? filterTextByKeyword(textoBruto, term) : textoBruto;
       const blocks = chunkText(baseText, textControlSize);
@@ -609,6 +869,38 @@ export async function callTool(state: SessionState, name: string, args: Record<s
       } else if (param.name === 'MostraDadosConsolidado') {
         queryParams[param.name] = 'False';
       }
+    }
+
+    if (def.listagem === 'DespesasporExigibilidade') {
+      const idx = missingRequired.indexOf('strTipoLista');
+      if (idx !== -1) missingRequired.splice(idx, 1);
+    }
+
+    if (
+      def.listagem === 'EmpenhosDespesas_Empenhado_PorNumeroEmpenho' ||
+      def.listagem === 'EmpenhosDespesas_Liquidado_PorNumeroEmpenho' ||
+      def.listagem === 'EmpenhosDespesas_Pago_PorNumeroEmpenho'
+    ) {
+      queryParams.IDButton = queryParams.IDButton || 'lnkDespesasPor_NotaEmpenho';
+    }
+
+    if (def.listagem === 'DespesasporExigibilidade') {
+      queryParams.strTipoLista = queryParams.strTipoLista || '1';
+    }
+
+    const validationIssues = validateQueryParams(queryParams, def.listagem);
+    if (validationIssues.length > 0) {
+      const payload = {
+        ok: false,
+        tool: name,
+        message: 'Parametros invalidos para a consulta.',
+        invalid_params: validationIssues,
+      };
+      return {
+        content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+        structuredContent: payload,
+        isError: true,
+      };
     }
 
     if (missingRequired.length > 0) {
